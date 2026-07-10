@@ -1,8 +1,8 @@
 'use client'
 
-import { useStore, DECAY_LABELS } from '@/store/useStore'
+import { useStore } from '@/store/useStore'
 import { motion, AnimatePresence } from 'framer-motion'
-import { BookOpen, Heart, Brain, Leaf, Calendar } from 'lucide-react'
+import { BookOpen, Heart, Brain, Apple, Calendar } from 'lucide-react'
 import GrowthTree from '@/components/GrowthTree'
 import ReciteDrawer from '@/components/ReciteDrawer'
 import PaceDrawer from '@/components/PaceDrawer'
@@ -22,11 +22,11 @@ function getGreeting(): string {
   return '晚上好，今天做得够多了'
 }
 
-function getLeafCountText(greenCount: number, yellowCount: number): string {
-  const total = greenCount + yellowCount
-  if (total === 0) return '还没有叶子，添加第一条背诵吧'
+function getLeafCountText(greenCount: number): string {
+  const total = greenCount
+  if (total === 0) return '还没有苹果，添加第一条背诵吧'
   if (total <= 5) return '小树苗正在努力生长'
-  if (total <= 12) return '枝头已经长出了几片叶子'
+  if (total <= 12) return '枝头已经长出了几个苹果'
   if (total <= 20) return '越来越茂盛了'
   return '已经是一棵大树了'
 }
@@ -36,7 +36,6 @@ export default function Home() {
     leaves,
     activePanel,
     setActivePanel,
-    decaySpeed,
     refreshLeafColors,
   } = useStore()
 
@@ -68,7 +67,6 @@ export default function Home() {
   }, [refreshLeafColors])
 
   const greenCount = leaves.filter((l) => l.color === 'green').length
-  const yellowCount = leaves.filter((l) => l.color === 'yellow').length
 
   return (
     <div className="min-h-screen flex flex-col transition-all duration-1000 app-bg">
@@ -82,7 +80,7 @@ export default function Home() {
           className="w-full max-w-sm text-center mb-2"
         >
           <h1 className="text-lg font-semibold text-foreground/80 tracking-wide flex items-center justify-center gap-2">
-            <Leaf className="w-4 h-4 text-moss" />
+            <Apple className="w-4 h-4 text-moss" />
             慢慢长
           </h1>
         </motion.header>
@@ -98,22 +96,7 @@ export default function Home() {
           {greeting || '\u00A0'}
         </motion.p>
 
-        {/* Speed indicator */}
-        <AnimatePresence>
-          {mounted && (
-            <motion.div
-              initial={{ opacity: 0, y: -4, height: 0 }}
-              animate={{ opacity: 1, y: 0, height: 'auto' }}
-              exit={{ opacity: 0, y: -4, height: 0 }}
-              transition={{ duration: 0.3 }}
-              className="mb-2"
-            >
-              <span className="inline-flex items-center gap-1 text-[10px] font-medium px-3 py-1 rounded-full bg-sea-blue/20 text-sea-blue-deep">
-                {DECAY_LABELS[decaySpeed]}
-              </span>
-            </motion.div>
-          )}
-        </AnimatePresence>
+
 
         {/* Leaf count hint */}
         <motion.p
@@ -122,10 +105,10 @@ export default function Home() {
           transition={{ delay: 0.4, duration: 0.6 }}
           className="text-[10px] text-soft-text/60 mb-4 text-center"
         >
-          {getLeafCountText(greenCount, yellowCount)}
-          {yellowCount > 0 && (
+          {getLeafCountText(greenCount)}
+          {greenCount > 0 && (
             <span className="ml-1 text-lemon-deep/70">
-              {yellowCount}片叶子等复习
+              {greenCount}个绿苹果等复习
             </span>
           )}
         </motion.p>
@@ -149,9 +132,9 @@ export default function Home() {
           transition={{ delay: 0.8, duration: 0.6 }}
           className="text-[10px] text-soft-text/40 text-center mt-1"
         >
-          {yellowCount > 0
-            ? '黄叶是需要复习的知识点，绿叶正在等待遗忘'
-            : '所有叶子都是绿色的，继续保持'
+          {greenCount > 0
+            ? '绿苹果需要复习，红苹果已完成'
+            : '所有苹果都是红色的，继续保持'
           }
         </motion.p>
       </main>

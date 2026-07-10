@@ -157,7 +157,7 @@ export default function TaskDrawer() {
                     className="flex items-center gap-1.5 text-xs font-medium text-moss bg-moss/10 px-4 py-2 rounded-full hover:bg-moss/20 transition-all duration-300 active:scale-95"
                   >
                     <Check className="w-3.5 h-3.5" />
-                    {currentMode === 'buffer' ? '做到了' : '完成了，叶子变绿'}
+                    {currentMode === 'buffer' ? '做到了' : '完成了，苹果变红'}
                   </button>
                 </div>
               </motion.div>
@@ -258,7 +258,7 @@ export default function TaskDrawer() {
                           </div>
                           <span className="text-xs text-moss font-medium">{task.subject} · {task.title}</span>
                         </div>
-                        <p className="text-[10px] text-soft-text mt-1 ml-7">叶子已经变绿了</p>
+                        <p className="text-[10px] text-soft-text mt-1 ml-7">苹果已经变红了</p>
                       </div>
                     ))}
                   </motion.div>
@@ -271,7 +271,7 @@ export default function TaskDrawer() {
           {pendingTasks.length === 0 && !showAddForm && (
             <div className="text-center py-6">
               <p className="text-sm text-soft-text">今天的任务都完成啦</p>
-              <p className="text-xs text-soft-text mt-1">树上的叶子都变绿了</p>
+              <p className="text-xs text-soft-text mt-1">树上的苹果都变红了</p>
             </div>
           )}
         </div>

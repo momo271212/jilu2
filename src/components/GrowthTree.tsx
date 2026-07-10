@@ -3,8 +3,30 @@
 import { motion, AnimatePresence } from 'framer-motion'
 import { useStore, type Leaf } from '@/store/useStore'
 
-// Single Leaf component
-function TreeLeaf({
+// Apple colors
+const APPLE_COLORS = {
+  green: {
+    fill: '#7CB968',
+    stroke: '#5E9448',
+    vein: '#4E8040',
+    glow: '#7CB968',
+  },
+  yellow: {
+    fill: '#FFD700',
+    stroke: '#E6B800',
+    vein: '#CC9900',
+    glow: '#FFE55C',
+  },
+  red: {
+    fill: '#FF6B6B',
+    stroke: '#E05555',
+    vein: '#CC4444',
+    glow: '#FF8585',
+  },
+}
+
+// Single Apple component
+function Apple({
   leaf,
   isNew,
   isBouncing,
@@ -16,6 +38,8 @@ function TreeLeaf({
   onBounceEnd: () => void
 }) {
   const isYellow = leaf.color === 'yellow'
+  const isRed = leaf.color === 'red'
+  const colors = isYellow ? APPLE_COLORS.yellow : isRed ? APPLE_COLORS.red : APPLE_COLORS.green
 
   return (
     <motion.g
@@ -24,7 +48,7 @@ function TreeLeaf({
         scale: isBouncing ? [1, 1.35, 0.9, 1.12, 1] : 1,
         opacity: 1,
         x: leaf.x,
-        y: isYellow ? [leaf.y, leaf.y - 2.5, leaf.y] : leaf.y,
+        y: (isYellow || isRed) ? [leaf.y, leaf.y - 2.5, leaf.y] : leaf.y,
       }}
       transition={{
         scale: isNew
@@ -34,7 +58,7 @@ function TreeLeaf({
             : { duration: 0.3 },
         opacity: { duration: 0.6 },
         x: { duration: 0 },
-        y: isYellow
+        y: (isYellow || isRed)
           ? { duration: 2.5, repeat: Infinity, ease: 'easeInOut' }
           : { duration: 0 },
       }}
@@ -45,13 +69,13 @@ function TreeLeaf({
         if (isBouncing) onBounceEnd()
       }}
     >
-      {/* Yellow glow */}
+      {/* Glow for yellow and red apples */}
       <AnimatePresence>
-        {isYellow && (
+        {(isYellow || isRed) && (
           <motion.ellipse
             rx={leaf.size + 6}
             ry={leaf.size * 1.3 + 6}
-            fill="#F7E8A0"
+            fill={colors.glow}
             opacity={0}
             animate={{ opacity: [0, 0.3, 0] }}
             transition={{ duration: 2.5, repeat: Infinity }}
@@ -59,23 +83,50 @@ function TreeLeaf({
         )}
       </AnimatePresence>
 
-      {/* Main leaf */}
+      {/* Apple body */}
       <ellipse
+        cx={0}
+        cy={0}
         rx={leaf.size}
-        ry={leaf.size * 1.3}
-        fill={isYellow ? '#F7E8A0' : '#7CB968'}
-        stroke={isYellow ? '#E0C868' : '#5E9448'}
+        ry={leaf.size * 1.2}
+        fill={colors.fill}
+        stroke={colors.stroke}
         strokeWidth="0.8"
         opacity="0.92"
       />
 
-      {/* Vein */}
-      <line
-        x1={0} y1={-leaf.size * 1.1} x2={0} y2={leaf.size * 1.1}
-        stroke={isYellow ? '#DCC050' : '#4E8040'} strokeWidth="0.5" opacity="0.4"
+      {/* Apple indent at top */}
+      <path
+        d={`M ${-leaf.size * 0.3} ${-leaf.size * 0.9} Q 0 ${-leaf.size * 1.15} ${leaf.size * 0.3} ${-leaf.size * 0.9}`}
+        fill="none"
+        stroke={colors.stroke}
+        strokeWidth="0.6"
+        opacity="0.5"
       />
-      <line x1={0} y1={-leaf.size * 0.4} x2={leaf.size * 0.6} y2={-leaf.size * 0.8} stroke={isYellow ? '#DCC050' : '#4E8040'} strokeWidth="0.3" opacity="0.25" />
-      <line x1={0} y1={leaf.size * 0.2} x2={-leaf.size * 0.5} y2={-leaf.size * 0.2} stroke={isYellow ? '#DCC050' : '#4E8040'} strokeWidth="0.3" opacity="0.25" />
+
+      {/* Stem */}
+      <line
+        x1={0}
+        y1={-leaf.size * 0.9}
+        x2={0}
+        y2={-leaf.size * 1.2}
+        stroke={colors.vein}
+        strokeWidth="0.8"
+        opacity="0.6"
+      />
+
+      {/* Leaf on apple */}
+      <ellipse
+        cx={leaf.size * 0.4}
+        cy={-leaf.size * 1.1}
+        rx={leaf.size * 0.35}
+        ry={leaf.size * 0.2}
+        fill={colors.fill}
+        stroke={colors.stroke}
+        strokeWidth="0.5"
+        opacity="0.7"
+        transform={`rotate(30 ${leaf.size * 0.4} ${-leaf.size * 1.1})`}
+      />
     </motion.g>
   )
 }
@@ -129,9 +180,9 @@ export default function GrowthTree() {
           <circle cx="200" cy="238" r="36" fill="#8FC880" opacity="0.35" />
         </g>
 
-        {/* Leaves */}
+        {/* Apples */}
         {leaves.map((leaf) => (
-          <TreeLeaf
+          <Apple
             key={leaf.id}
             leaf={leaf}
             isNew={newLeafIds.has(leaf.id)}

@@ -1,91 +1,142 @@
 'use client'
 
-import { useStore, DECAY_DURATIONS, DECAY_LABELS, DECAY_TIMES, type ReciteItem } from '@/store/useStore'
+import { useStore, FEELING_LABELS, FEELING_DURATIONS, type ReciteItem } from '@/store/useStore'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, Trash2, BookOpen, Check, X } from 'lucide-react'
+import { Plus, Trash2, BookOpen, Edit2, Check, X, Clock } from 'lucide-react'
 import { useState, useEffect, useCallback } from 'react'
 import ReciteTimer from './ReciteTimer'
+import FeelingSelector from './FeelingSelector'
 
 function formatRemaining(ms: number): string {
-  if (ms <= 0) return '即将变黄'
-  const totalSec = Math.floor(ms / 1000)
-  if (totalSec >= 3600) {
-    const h = Math.floor(totalSec / 3600)
-    const m = Math.floor((totalSec % 3600) / 60)
-    return m > 0 ? `${h}h${m}m` : `${h}h`
-  }
-  const m = Math.floor(totalSec / 60)
-  const s = totalSec % 60
-  return `${m}m${s.toString().padStart(2, '0')}s`
+  const totalSeconds = Math.floor(ms / 1000)
+  const m = Math.floor(totalSeconds / 60)
+  const s = totalSeconds % 60
+  if (m > 0) return `${m}分${s}秒`
+  return `${s}秒`
 }
 
-function DecayBar({ item, decaySpeed }: { item: ReciteItem; decaySpeed: string }) {
-  const [, setTick] = useState(0)
+function formatCountdown(totalSeconds: number): string {
+  const m = Math.floor(totalSeconds / 60)
+  const s = totalSeconds % 60
+  return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
+}
+
+function CountdownBar({ itemId, itemName }: { itemId: string; itemName: string }) {
+  const { getItemCountdown } = useStore()
+  const [remaining, setRemaining] = useState<number | null>(null)
 
   useEffect(() => {
-    const interval = setInterval(() => setTick((t) => t + 1), 1000)
+    const update = () => {
+      const ms = getItemCountdown(itemId)
+      setRemaining(ms)
+    }
+    update()
+    const interval = setInterval(update, 1000)
     return () => clearInterval(interval)
-  }, [])
+  }, [itemId, getItemCountdown])
 
-  if (item.lastMemorizedAt === null) return null
-
-  const duration = DECAY_DURATIONS[decaySpeed as keyof typeof DECAY_DURATIONS]
-  const elapsed = Date.now() - item.lastMemorizedAt
-  const remaining = Math.max(0, duration - elapsed)
-  const progress = Math.min(1, elapsed / duration)
+  if (remaining === null) return null
+  if (remaining <= 0) return null
 
   return (
     <div className="mt-2">
-      <div className="flex items-center justify-between mb-1">
-        <div className="flex-1 h-1.5 rounded-full bg-muted/60 overflow-hidden mr-3">
-          <motion.div
-            className="h-full rounded-full bg-gradient-to-r from-moss/60 to-cream-deep/80"
-            animate={{ width: `${progress * 100}%` }}
-            transition={{ duration: 0.5 }}
-          />
-        </div>
-        <span className="text-[10px] text-soft-text whitespace-nowrap w-16 text-right">
-          {formatRemaining(remaining)}
-        </span>
+      <div className="flex items-center gap-1.5 text-[10px] text-soft-text">
+        <Clock className="w-3 h-3" />
+        <span>{formatRemaining(remaining)}后变红</span>
       </div>
     </div>
   )
 }
 
-function MiniLeaf({ color, size = 16 }: { color: 'green' | 'yellow'; size?: number }) {
+function ReciteCountdown({ itemId }: { itemId: string }) {
+  const { getItemTimerRemaining } = useStore()
+  const [remaining, setRemaining] = useState<number | null>(null)
+
+  useEffect(() => {
+    const update = () => {
+      const secs = getItemTimerRemaining(itemId)
+      setRemaining(secs)
+    }
+    update()
+    const interval = setInterval(update, 1000)
+    return () => clearInterval(interval)
+  }, [itemId, getItemTimerRemaining])
+
+  if (remaining === null) return null
+  if (remaining <= 0) return null
+
+  return (
+    <div className="mt-2">
+      <div className="flex items-center gap-1.5 text-[10px] text-sea-blue">
+        <Clock className="w-3 h-3" />
+        <span>背诵倒计时: {formatCountdown(remaining)}</span>
+      </div>
+    </div>
+  )
+}
+
+function MiniApple({ color, size = 16 }: { color: 'green' | 'yellow' | 'red'; size?: number }) {
+  const isYellow = color === 'yellow'
+  const isRed = color === 'red'
+  const colors = isYellow
+    ? { fill: '#FFD700', stroke: '#E6B800', vein: '#CC9900' }
+    : isRed
+      ? { fill: '#FF6B6B', stroke: '#E05555', vein: '#CC4444' }
+      : { fill: '#7CB968', stroke: '#5E9448', vein: '#4E8040' }
+
   return (
     <svg viewBox="0 0 20 26" width={size} height={size * 1.3} className="flex-shrink-0">
+      {/* Apple body */}
       <ellipse
-        cx="10" cy="13" rx="8" ry="11"
-        fill={color === 'green' ? '#7CB968' : '#F7E8A0'}
-        stroke={color === 'green' ? '#5E9448' : '#E0C868'}
-        strokeWidth="1"
+        cx="10" cy="13" rx="8" ry="10"
+        fill={colors.fill}
+        stroke={colors.stroke}
+        strokeWidth="0.8"
         opacity="0.9"
       />
-      <line x1="10" y1="4" x2="10" y2="22" stroke={color === 'green' ? '#4E8040' : '#DCC050'} strokeWidth="0.8" opacity="0.4" />
+      {/* Apple indent at top */}
+      <path
+        d="M 5 5 Q 10 3 15 5"
+        fill="none"
+        stroke={colors.stroke}
+        strokeWidth="0.6"
+        opacity="0.5"
+      />
+      {/* Stem */}
+      <line x1="10" y1="3" x2="10" y2="1" stroke={colors.vein} strokeWidth="0.8" opacity="0.6" />
+      {/* Small leaf on apple */}
+      <ellipse
+        cx="13"
+        cy="2"
+        rx="3"
+        ry="1.5"
+        fill={colors.fill}
+        stroke={colors.stroke}
+        strokeWidth="0.5"
+        opacity="0.7"
+        transform={`rotate(30 13 2)`}
+      />
     </svg>
   )
 }
 
 export default function ReciteDrawer() {
   const {
-    reciteItems, leaves, decaySpeed,
-    addReciteItem, deleteReciteItem, completeRecite,
+    reciteItems, leaves, decaySpeed, todayFeeling,
+    addReciteItem, deleteReciteItem, setFeeling,
+    getItemCountdown,
     activePanel, setActivePanel,
   } = useStore()
 
   const [showAddForm, setShowAddForm] = useState(false)
   const [newName, setNewName] = useState('')
-  const [confirmId, setConfirmId] = useState<string | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [recitingId, setRecitingId] = useState<string | null>(null)
+  const [completedDuration, setCompletedDuration] = useState<number | null>(null) // New state to store completed duration
+  const [showFeelingPanel, setShowFeelingPanel] = useState(false)
 
   // All hooks MUST be before any early return (React rules of hooks)
   const itemCount = reciteItems.length
-  const getLeafColor = useCallback((itemId: string): 'green' | 'yellow' => {
-    const leaf = leaves.find((l) => l.reciteItemId === itemId)
-    return leaf?.color ?? 'yellow'
-  }, [leaves])
 
   const handleAdd = useCallback(() => {
     if (!newName.trim() || itemCount >= 25) return
@@ -93,13 +144,6 @@ export default function ReciteDrawer() {
     setNewName('')
     setShowAddForm(false)
   }, [newName, itemCount, addReciteItem])
-
-  const handleConfirmRecite = useCallback(() => {
-    if (confirmId) {
-      completeRecite(confirmId)
-      setConfirmId(null)
-    }
-  }, [confirmId, completeRecite])
 
   const handleConfirmDelete = useCallback(() => {
     if (deleteId) {
@@ -112,24 +156,37 @@ export default function ReciteDrawer() {
     setRecitingId(itemId)
   }, [])
 
-  const handleReciteComplete = useCallback((durationMinutes: number) => {
-    // 先完成背诵（更新叶子状态）
-    if (recitingId) {
-      completeRecite(recitingId)
-    }
-    setRecitingId(null)
-  }, [recitingId, completeRecite])
+  const handleTimerComplete = useCallback((durationMinutes: number) => {
+    // Timer completed - now show feeling selector
+    setCompletedDuration(durationMinutes)
+    setShowFeelingPanel(true)
+  }, [])
 
   const handleCloseTimer = useCallback(() => {
     setRecitingId(null)
+    setCompletedDuration(null)
+    setShowFeelingPanel(false)
   }, [])
+
+  const handleFeelingSelected = useCallback(() => {
+    // This is called when FeelingSelector finishes
+    setRecitingId(null)
+    setCompletedDuration(null)
+    setShowFeelingPanel(false)
+  }, [])
+
+  const getLeafColor = useCallback((itemId: string): 'green' | 'yellow' | 'red' => {
+    const leaf = leaves.find((l) => l.reciteItemId === itemId)
+    return leaf?.color ?? 'green'
+  }, [leaves])
+
+  // 必须在条件返回之前定义
+  const greenCount = leaves.filter((l) => l.color === 'green').length
+  const yellowCount = leaves.filter((l) => l.color === 'yellow').length
+  const redCount = leaves.filter((l) => l.color === 'red').length
 
   if (activePanel !== 'recite') return null
 
-  const greenCount = leaves.filter((l) => l.color === 'green').length
-  const yellowCount = leaves.filter((l) => l.color === 'yellow').length
-
-  const confirmItem = confirmId ? reciteItems.find((r) => r.id === confirmId) : null
   const deleteItem = deleteId ? reciteItems.find((r) => r.id === deleteId) : null
   const recitingItem = recitingId ? reciteItems.find((r) => r.id === recitingId) : null
 
@@ -181,20 +238,74 @@ export default function ReciteDrawer() {
             <div>
               <h2 className="text-lg font-semibold text-foreground tracking-tight">背诵</h2>
               <p className="text-xs text-soft-text mt-0.5">
-                {greenCount}绿 {yellowCount}黄 · 最多25条
+                {redCount}红 {greenCount}绿 · 最多25条
               </p>
             </div>
-            <div className="flex items-center gap-1 text-[10px] text-soft-text bg-muted/40 px-2.5 py-1 rounded-full">
-              <span>节奏: {DECAY_LABELS[decaySpeed]}</span>
+            <div className="flex items-center gap-2">
+              {/* Daily feeling selector */}
+              <button
+                onClick={() => setShowFeelingPanel(!showFeelingPanel)}
+                className="flex items-center gap-1.5 text-[10px] bg-muted/40 px-2.5 py-1 rounded-full hover:bg-muted/60 transition-colors"
+              >
+                <span>节奏:</span>
+                {todayFeeling ? (
+                  <span className="font-medium text-foreground">
+                    {FEELING_LABELS[todayFeeling]}
+                  </span>
+                ) : (
+                  <span className="text-soft-text">未设置</span>
+                )}
+              </button>
+
             </div>
           </div>
         </div>
+
+        {/* Daily feeling panel */}
+        <AnimatePresence>
+          {showFeelingPanel && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="px-6 pb-3 overflow-hidden"
+            >
+              <div className="soft-card p-3">
+                <p className="text-xs font-medium text-foreground mb-2">今天的感觉</p>
+                <p className="text-[10px] text-soft-text mb-2.5">
+                  选择今天的感觉来设置复习节奏
+                </p>
+                <div className="grid grid-cols-3 gap-2">
+                  {(['good', 'neutral', 'bad'] as const).map((feeling) => (
+                    <button
+                      key={feeling}
+                      onClick={() => {
+                        setFeeling(feeling)
+                        setShowFeelingPanel(false)
+                      }}
+                      className={`p-2.5 rounded-xl border text-center transition-all duration-300 active:scale-95 ${
+                        todayFeeling === feeling
+                          ? 'bg-moss/15 text-moss border-moss/30'
+                          : 'bg-muted/30 text-soft-text hover:bg-muted/50 border-border/30'
+                      }`}
+                    >
+                      <p className="text-sm font-medium">{FEELING_LABELS[feeling]}</p>
+                      <p className="text-[10px] opacity-70 mt-0.5">
+                        {feeling === 'good' ? '24h' : feeling === 'neutral' ? '12h' : '6h'}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* List */}
         <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-2.5 relative">
           {reciteItems.map((item) => {
             const color = getLeafColor(item.id)
-            const isYellow = color === 'yellow'
+            const isRed = color === 'red'
 
             return (
               <motion.div
@@ -204,25 +315,41 @@ export default function ReciteDrawer() {
               >
                 <div className="flex items-start gap-2.5">
                   <div className="mt-0.5">
-                    <MiniLeaf color={color} size={20} />
+                    <MiniApple color={color} size={20} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
                       <h3 className="text-sm font-medium text-foreground truncate">{item.name}</h3>
-                      <button
-                        onClick={() => setDeleteId(item.id)}
-                        className="ml-2 w-6 h-6 rounded-full flex items-center justify-center text-soft-text/40 hover:text-cream-deep hover:bg-cream/30 transition-colors flex-shrink-0"
-                        aria-label="删除"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => setDeleteId(item.id)}
+                          className="w-6 h-6 rounded-full flex items-center justify-center text-soft-text/40 hover:text-cream-deep hover:bg-cream/30 transition-colors flex-shrink-0"
+                          aria-label="删除"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
                     </div>
-                    {/* Decay bar for green items */}
-                    {!isYellow && <DecayBar item={item} decaySpeed={decaySpeed} />}
+
+                    {/* Countdown timer for green items */}
+                    {!isRed && item.lastMemorizedAt && (
+                      <CountdownBar itemId={item.id} itemName={item.name} />
+                    )}
+
+                    {/* Custom duration display/edit or timer countdown */}
+                    {item.timerStartedAt && item.timerDuration ? (
+                      <ReciteCountdown itemId={item.id} />
+                    ) : (
+                      <p className="text-[10px] text-soft-text mt-0.5">
+                        {todayFeeling ? `复习间隔: ${FEELING_LABELS[todayFeeling]} (${Math.floor(FEELING_DURATIONS[todayFeeling] / 1000 / 60)}分钟)` : '复习间隔: 未设置 (不影响)'}
+                      </p>
+                    )}
                   </div>
                 </div>
-                {/* Recite button for yellow items */}
-                {isYellow && (
+
+                {/* Recite button for red items */}
+                {/* Recite button */}
+                {(isRed || item.lastMemorizedAt === null) && (
                   <div className="mt-2.5 flex justify-end">
                     <button
                       onClick={() => handleStartRecite(item.id)}
@@ -275,6 +402,7 @@ export default function ReciteDrawer() {
                   className="w-full px-3 py-2 text-sm bg-white/70 rounded-xl border border-border/50 focus:border-sea-blue focus:ring-1 focus:ring-sea-blue/30 outline-none placeholder:text-soft-text/50 transition-all duration-300 mb-3"
                   autoFocus
                 />
+
                 <button
                   onClick={handleAdd}
                   disabled={!newName.trim() || itemCount >= 25}
@@ -290,7 +418,7 @@ export default function ReciteDrawer() {
           {/* Empty state */}
           {reciteItems.length === 0 && !showAddForm && (
             <div className="text-center py-8">
-              <MiniLeaf color="yellow" size={32} />
+              <MiniApple color="green" size={32} />
               <p className="text-sm text-soft-text mt-3">还没有背诵内容</p>
               <p className="text-xs text-soft-text/60 mt-1">添加要背诵的知识点吧</p>
             </div>
@@ -300,58 +428,27 @@ export default function ReciteDrawer() {
 
       {/* Recite Timer overlay */}
       <AnimatePresence>
-        {recitingItem && (
+        {recitingItem && !showFeelingPanel && (
           <ReciteTimer
             key={recitingItem.id}
+            itemId={recitingItem.id}
             itemName={recitingItem.name}
             onClose={handleCloseTimer}
-            onComplete={handleReciteComplete}
+            onComplete={handleTimerComplete}
           />
         )}
       </AnimatePresence>
 
-      {/* Confirm recite dialog (legacy - kept for compatibility) */}
+      {/* Feeling Selector overlay - shows after timer completes */}
       <AnimatePresence>
-        {confirmItem && !recitingId && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="absolute inset-0 z-10 flex items-end justify-center px-8 pb-24"
-            onClick={() => setConfirmId(null)}
-          >
-            <motion.div
-              initial={{ y: 20, scale: 0.95 }}
-              animate={{ y: 0, scale: 1 }}
-              exit={{ y: 20, scale: 0.95 }}
-              transition={{ duration: 0.3 }}
-              onClick={(e) => e.stopPropagation()}
-              className="soft-card p-5 w-full max-w-sm shadow-lg"
-            >
-              <div className="text-center mb-4">
-                <MiniLeaf color="yellow" size={28} />
-                <p className="text-sm font-medium text-foreground mt-2">{confirmItem.name}</p>
-              </div>
-              <p className="text-xs text-soft-text text-center leading-relaxed mb-4">
-                回忆一下这个知识点的要点<br />确认自己复习过了再点击按钮
-              </p>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setConfirmId(null)}
-                  className="flex-1 py-2.5 rounded-xl text-xs text-soft-text bg-muted/40 hover:bg-muted/60 transition-colors"
-                >
-                  再想想
-                </button>
-                <button
-                  onClick={handleConfirmRecite}
-                  className="flex-1 py-2.5 rounded-xl text-xs font-medium text-white bg-moss hover:bg-moss/80 transition-colors flex items-center justify-center gap-1.5 active:scale-[0.98]"
-                >
-                  <Check className="w-3.5 h-3.5" />
-                  我背诵完了
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
+        {showFeelingPanel && recitingItem && completedDuration !== null && (
+          <FeelingSelector
+            key={`feeling-${recitingItem.id}`}
+            itemId={recitingItem.id}
+            itemName={recitingItem.name}
+            completedDuration={completedDuration}
+            onClose={handleFeelingSelected}
+          />
         )}
       </AnimatePresence>
 
@@ -376,7 +473,7 @@ export default function ReciteDrawer() {
               <p className="text-sm font-medium text-foreground text-center mb-1">
                 确定删除「{deleteItem.name}」？
               </p>
-              <p className="text-xs text-soft-text text-center mb-4">树上对应的叶子也会消失</p>
+              <p className="text-xs text-soft-text text-center mb-4">树上对应的苹果也会消失</p>
               <div className="flex gap-2">
                 <button
                   onClick={() => setDeleteId(null)}

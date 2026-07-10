@@ -2,31 +2,19 @@ import { create } from 'zustand'
 
 // ---------- Types ----------
 
-export type DecaySpeed = 'slow' | 'medium' | 'fast'
+export const FEELING_DURATIONS = {
+  good: 24 * 60 * 60 * 1000,      // 24 hours
+  neutral: 12 * 60 * 60 * 1000,   // 12 hours
+  bad: 6 * 60 * 60 * 1000,        // 6 hours
+} as const
 
-export const DECAY_DURATIONS: Record<DecaySpeed, number> = {
-  slow: 2 * 60 * 60 * 1000,    // 2 hours
-  medium: 1 * 60 * 60 * 1000,  // 1 hour
-  fast: 30 * 60 * 1000,         // 30 min
-}
+export type FeelingType = 'good' | 'neutral' | 'bad'
 
-export const DECAY_LABELS: Record<DecaySpeed, string> = {
-  slow: '慢慢来',
-  medium: '适中',
-  fast: '冲刺',
-}
-
-export const DECAY_DESCS: Record<DecaySpeed, string> = {
-  slow: '绿叶2小时后变黄',
-  medium: '绿叶1小时后变黄',
-  fast: '绿叶30分钟后变黄',
-}
-
-export const DECAY_TIMES: Record<DecaySpeed, string> = {
-  slow: '2小时',
-  medium: '1小时',
-  fast: '30分钟',
-}
+export const FEELING_LABELS = {
+  good: '掌握很好',
+  neutral: '基本掌握',
+  bad: '还需加强',
+} as const
 
 export interface Leaf {
   id: string
@@ -35,7 +23,7 @@ export interface Leaf {
   y: number
   size: number
   rotation: number
-  color: 'green' | 'yellow'
+  color: 'green' | 'yellow' | 'red'
   knowledgePoint: string
   hint: string
 }
@@ -46,6 +34,11 @@ export interface ReciteItem {
   name: string
   lastMemorizedAt: number | null
   createdAt: number
+  todayRecited: boolean  // Kept for backward compatibility
+  timerStartedAt: number | null  // Timestamp when the recite timer was started
+  timerDuration: number | null  // Duration in seconds for the current timer
+  lastFeeling: FeelingType | null  // Last feeling for this item (determines its color speed)
+  lastFeelingAt: number | null  // When the feeling was set
 }
 
 export interface FocusRecord {
@@ -88,48 +81,32 @@ export interface Distraction {
   time: string
 }
 
-// ---------- Leaf Slots (25 positions on the canopy) ----------
+// ---------- Apple Slots (8 positions on the tree, more spread out) ----------
 
-export const LEAF_SLOTS = [
-  // Top center
-  { x: 200, y: 168, size: 14, rotation: -3 },
-  { x: 183, y: 176, size: 11, rotation: 10 },
-  { x: 217, y: 176, size: 11, rotation: -8 },
-  // Upper sides
-  { x: 158, y: 188, size: 12, rotation: -18 },
-  { x: 242, y: 188, size: 12, rotation: 18 },
-  { x: 140, y: 200, size: 11, rotation: -22 },
-  { x: 260, y: 200, size: 11, rotation: 22 },
-  // Middle band
-  { x: 180, y: 198, size: 10, rotation: -5 },
-  { x: 220, y: 198, size: 10, rotation: 5 },
-  { x: 200, y: 208, size: 12, rotation: 0 },
-  { x: 165, y: 210, size: 10, rotation: -12 },
-  { x: 235, y: 210, size: 10, rotation: 12 },
-  { x: 190, y: 190, size: 10, rotation: 3 },
-  // Lower middle
-  { x: 150, y: 226, size: 11, rotation: -15 },
-  { x: 250, y: 226, size: 11, rotation: 15 },
-  { x: 183, y: 226, size: 10, rotation: -8 },
-  { x: 217, y: 226, size: 10, rotation: 8 },
-  // Lower sides
-  { x: 125, y: 236, size: 10, rotation: -25 },
-  { x: 275, y: 236, size: 10, rotation: 25 },
-  { x: 108, y: 246, size: 9, rotation: -20 },
-  { x: 292, y: 246, size: 9, rotation: 20 },
-  // Bottom
-  { x: 168, y: 240, size: 9, rotation: -10 },
-  { x: 232, y: 240, size: 9, rotation: 10 },
-  { x: 200, y: 246, size: 10, rotation: 0 },
-  { x: 145, y: 248, size: 8, rotation: -18 },
-  { x: 255, y: 248, size: 8, rotation: 18 },
+export const APPLE_SLOTS = [
+  // Top area - more spread
+  { x: 200, y: 175, size: 12, rotation: 0 },
+  { x: 150, y: 200, size: 11, rotation: -15 },
+  { x: 250, y: 200, size: 11, rotation: 15 },
+
+  // Upper middle - wider spread
+  { x: 120, y: 230, size: 10, rotation: -20 },
+  { x: 280, y: 230, size: 10, rotation: 20 },
+
+  // Middle
+  { x: 180, y: 240, size: 11, rotation: -10 },
+  { x: 220, y: 240, size: 11, rotation: 10 },
+
+  // Bottom - spread to edges
+  { x: 145, y: 260, size: 10, rotation: -18 },
+  { x: 255, y: 260, size: 10, rotation: 18 },
 ]
 
 // ---------- Helpers ----------
 
 let slotIndex = 0
 function nextSlot() {
-  const slot = LEAF_SLOTS[slotIndex % LEAF_SLOTS.length]
+  const slot = APPLE_SLOTS[slotIndex % APPLE_SLOTS.length]
   slotIndex++
   return slot
 }
@@ -145,11 +122,15 @@ interface AppState {
   // Recite
   reciteItems: ReciteItem[]
   reciteRecords: ReciteRecord[]
-  decaySpeed: DecaySpeed
+  todayFeeling: FeelingType | null  // Global feeling for today (determines color speed)
   addReciteItem: (name: string) => void
   deleteReciteItem: (id: string) => void
-  completeRecite: (id: string) => void
-  setDecaySpeed: (speed: DecaySpeed) => void
+  completeRecite: (id: string, durationMinutes: number, feeling?: FeelingType | null) => void
+  setFeeling: (feeling: FeelingType) => void  // Sets global feeling for today
+  getItemCountdown: (itemId: string) => number | null
+  getItemTimerRemaining: (itemId: string) => number | null
+  startItemTimer: (itemId: string, durationSeconds: number) => void
+  stopItemTimer: (itemId: string) => void
 
   // Focus (independent)
   focusRecords: FocusRecord[]
@@ -187,7 +168,7 @@ export const useStore = create<AppState>((set, get) => ({
   // --- Recite ---
   reciteItems: [],
   reciteRecords: [],
-  decaySpeed: 'medium',
+  todayFeeling: null,  // Global feeling for today
 
   addReciteItem: (name) => {
     const state = get()
@@ -205,9 +186,9 @@ export const useStore = create<AppState>((set, get) => ({
       y: slot.y,
       size: slot.size,
       rotation: slot.rotation,
-      color: 'yellow',
+      color: 'green',
       knowledgePoint: name,
-      hint: `背诵"${name}"后叶子会变绿`,
+      hint: `背诵"${name}"后苹果变红`,
     }
 
     const newItem: ReciteItem = {
@@ -216,6 +197,11 @@ export const useStore = create<AppState>((set, get) => ({
       name,
       lastMemorizedAt: null,
       createdAt: Date.now(),
+      todayRecited: false,
+      timerStartedAt: null,
+      timerDuration: null,
+      lastFeeling: null,
+      lastFeelingAt: null,
     }
 
     set((s) => ({
@@ -245,23 +231,78 @@ export const useStore = create<AppState>((set, get) => ({
     }))
   },
 
-  completeRecite: (id) => {
+  setFeeling: (feeling) => {
+    // Set global feeling for today - this determines how fast apples turn red
+    set({ todayFeeling: feeling })
+  },
+
+  // Get countdown for an item (when it will turn red)
+  getItemCountdown: (itemId) => {
+    const state = get()
+    const item = state.reciteItems.find((r) => r.id === itemId)
+    if (!item || !item.lastMemorizedAt) return null
+
+    const now = Date.now()
+    const feeling = item.lastFeeling || state.todayFeeling
+    if (!feeling) return null // If no feeling is determined, can't calculate countdown
+
+    const feelingDuration = FEELING_DURATIONS[feeling]
+    const elapsed = now - item.lastMemorizedAt
+    const remaining = Math.max(0, feelingDuration - elapsed)
+
+    return remaining
+  },
+
+  // Get remaining timer countdown for an item (during recitation)
+  getItemTimerRemaining: (itemId) => {
+    const state = get()
+    const item = state.reciteItems.find((r) => r.id === itemId)
+    if (!item || !item.timerStartedAt || !item.timerDuration) return null
+
+    const now = Date.now()
+    const elapsed = Math.floor((now - item.timerStartedAt) / 1000)
+    const remaining = Math.max(0, item.timerDuration - elapsed)
+
+    return remaining
+  },
+
+  // Start the timer for an item
+  startItemTimer: (itemId, durationSeconds) => {
+    set((s) => ({
+      reciteItems: s.reciteItems.map((r) =>
+        r.id === itemId ? { ...r, timerStartedAt: Date.now(), timerDuration: durationSeconds } : r
+      ),
+    }))
+  },
+
+  // Stop/clear the timer for an item
+  stopItemTimer: (itemId) => {
+    set((s) => ({
+      reciteItems: s.reciteItems.map((r) =>
+        r.id === itemId ? { ...r, timerStartedAt: null, timerDuration: null } : r
+      ),
+    }))
+  },
+
+  completeRecite: (id, durationMinutes, feeling) => {
     const state = get()
     const item = state.reciteItems.find((r) => r.id === id)
     if (!item) return
     const now = Date.now()
-    const today = new Date().toISOString().split('T')[0] // YYYY-MM-DD
+    const today = new Date().toISOString().split('T')[0]
 
     reciteRecordCounter++
 
     set((s) => ({
       reciteItems: s.reciteItems.map((r) =>
-        r.id === id ? { ...r, lastMemorizedAt: now } : r
+        r.id === id ? {
+          ...r,
+          lastMemorizedAt: now,
+          todayRecited: true,
+          lastFeeling: feeling || null,  // Record this item's feeling
+          lastFeelingAt: now
+        } : r
       ),
-      leaves: s.leaves.map((l) =>
-        l.id === item.leafId ? { ...l, color: 'green' as const } : l
-      ),
-      bounceLeafIds: new Set([...s.bounceLeafIds, item.leafId]),
       selectedLeafId: s.selectedLeafId === item.leafId ? null : s.selectedLeafId,
       reciteRecords: [
         ...s.reciteRecords,
@@ -273,34 +314,6 @@ export const useStore = create<AppState>((set, get) => ({
           timestamp: now,
         },
       ],
-    }))
-  },
-
-  setDecaySpeed: (speed) => {
-    const state = get()
-    const decayDuration = DECAY_DURATIONS[speed]
-    const now = Date.now()
-
-    // Recalculate all leaf colors with new speed
-    const updatedLeaves = state.leaves.map((leaf) => {
-      const item = state.reciteItems.find((r) => r.id === leaf.reciteItemId)
-      if (!item || item.lastMemorizedAt === null) {
-        return leaf.color === 'yellow' ? leaf : { ...leaf, color: 'yellow' as const }
-      }
-      const elapsed = now - item.lastMemorizedAt
-      const duration = item.customDecayDuration ?? decayDuration
-      const newColor = elapsed >= duration ? 'yellow' as const : 'green' as const
-      return newColor === leaf.color ? leaf : { ...leaf, color: newColor }
-    })
-
-    set({ decaySpeed: speed, leaves: updatedLeaves })
-  },
-
-  updateReciteCustomDuration: (id, customDecayDuration) => {
-    set((s) => ({
-      reciteItems: s.reciteItems.map((r) =>
-        r.id === id ? { ...r, customDecayDuration } : r
-      ),
     }))
   },
 
@@ -352,15 +365,33 @@ export const useStore = create<AppState>((set, get) => ({
     let changed = false
     const updatedLeaves = state.leaves.map((leaf) => {
       const item = state.reciteItems.find((r) => r.id === leaf.reciteItemId)
-      if (!item || item.lastMemorizedAt === null) {
-        if (leaf.color !== 'yellow') { changed = true; return { ...leaf, color: 'yellow' as const } }
+      if (!item || !item.lastMemorizedAt) {
+        // Never reviewed → Green
+        if (leaf.color !== 'green') { changed = true; return { ...leaf, color: 'green' as const } }
         return leaf
       }
+
+      // Use item's own feeling if available, otherwise use global todayFeeling
+      const feeling = item.lastFeeling || state.todayFeeling
+      if (!feeling) {
+        // No feeling set → keep green (waiting for user to set feeling)
+        if (leaf.color !== 'green') { changed = true; return { ...leaf, color: 'green' as const } }
+        return leaf
+      }
+
+      // Use feeling duration to calculate when to turn red
+      const feelingDuration = FEELING_DURATIONS[feeling]
       const elapsed = now - item.lastMemorizedAt
-      const duration = DECAY_DURATIONS[state.decaySpeed]
-      const newColor = elapsed >= duration ? 'yellow' as const : 'green' as const
-      if (newColor !== leaf.color) { changed = true; return { ...leaf, color: newColor } }
-      return leaf
+
+      if (elapsed >= feelingDuration) {
+        // Feeling duration elapsed → Red (ready for next review)
+        if (leaf.color !== 'red') { changed = true; return { ...leaf, color: 'red' as const } }
+        return leaf
+      } else {
+        // Still within feeling duration → Green
+        if (leaf.color !== 'green') { changed = true; return { ...leaf, color: 'green' as const } }
+        return leaf
+      }
     })
 
     if (changed) set({ leaves: updatedLeaves })
